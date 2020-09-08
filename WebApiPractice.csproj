@@ -5,7 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="10.0.0" />
+    <PackageReference Include="AutoMapper.extensions.microsoft.dependencyinjection" Version="8.0.1" />
     <PackageReference Include="microsoft.aspnetcore.mvc.versioning" Version="4.1.1" />
+    <PackageReference Include="Microsoft.entityframeworkcore" Version="3.1.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.inmemory" Version="3.1.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="3.1.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="3.1.8" />
     <PackageReference Include="nswag.aspnetcore" Version="13.7.0" />
   </ItemGroup>
 
