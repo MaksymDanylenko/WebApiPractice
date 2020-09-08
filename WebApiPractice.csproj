@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="microsoft.aspnetcore.mvc.versioning" Version="4.1.1" />
+    <PackageReference Include="nswag.aspnetcore" Version="13.7.0" />
+  </ItemGroup>
+
+
+</Project>
