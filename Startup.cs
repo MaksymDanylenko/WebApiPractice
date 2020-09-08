@@ -27,7 +27,11 @@ namespace WebApiPractice
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllers(options => options.Filters.Add<JsonExceptionFilter>());
+            services.AddControllers(options =>
+            {
+                options.Filters.Add<JsonExceptionFilter>();
+                options.Filters.Add<RequireHttpsOrCloseAttribute>();
+            });
 
             services.AddRouting(options => options.LowercaseUrls = true);
 
@@ -41,6 +45,13 @@ namespace WebApiPractice
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.ReportApiVersions = true;
                 options.ApiVersionSelector = new CurrentImplementationApiVersionSelector(options);
+            });
+
+            services.AddCors(options => {
+                options.AddPolicy("AllowMyApp", policy => policy
+                //.WithOrigins("https://example.com")); // example.com making requests
+                .AllowAnyOrigin());
+
             });
         }
 
@@ -56,12 +67,18 @@ namespace WebApiPractice
                 app.UseSwaggerUi3();
 
             }
+            else
+            {
+                app.UseHsts();
+            }
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseRouting();
 
             app.UseAuthorization();
+
+            app.UseCors("AllowMyApp");
 
             app.UseEndpoints(endpoints =>
             {
