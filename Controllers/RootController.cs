@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WebApiPractice.Models;
 
 namespace WebApiPractice.Controllers
 {
@@ -11,16 +12,11 @@ namespace WebApiPractice.Controllers
         [ProducesResponseType(200)]
         public IActionResult GetRoot()
         {
-            var response = new {
-                href = Url.Link(nameof(GetRoot), null),
-                rooms = new
-                {
-                    href = Url.Link(nameof(RoomsController.GetRooms), null)
-                },
-                info = new
-                {
-                    href = Url.Link(nameof(InfoController.GetInfo), null)
-                }
+            var response = new RootResponse
+            {
+                Self = Link.To(nameof(GetRoot)),
+                Rooms = Link.To(nameof(RoomsController.GetRooms)),
+                Info = Link.To(nameof(InfoController.GetInfo))
             };
 
             return Ok(response);

@@ -2,9 +2,9 @@ using Newtonsoft.Json;
 
 namespace WebApiPractice.Models
 {
-    public abstract class Resourсe
+    public abstract class Resourсe : Link
     {
-        [JsonProperty(Order = -2)]
-        public string Href { get; set; }
+        [JsonIgnore]
+        public Link Self { get; set; }
     }
 }
