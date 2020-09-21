@@ -1,7 +1,11 @@
+﻿using LandonApi.Models;
 using Microsoft.AspNetCore.Mvc;
-using WebApiPractice.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace WebApiPractice.Infrastructure
+namespace LandonApi.Infrastructure
 {
     public class LinkRewriter
     {

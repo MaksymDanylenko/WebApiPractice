@@ -1,3 +1,9 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using LandonApi.Filters;
+using LandonApi.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -5,16 +11,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
-using WebApiPractice.Filters;
-using WebApiPractice.Models;
-using WebApiPractice.Services;
+using NSwag.AspNetCore;
+using LandonApi.Services;
 using AutoMapper;
-using WebApiPractice.Infrastructure;
+using LandonApi.Infrastructure;
+using Newtonsoft.Json;
+using Microsoft.AspNetCore.Identity;
+using AspNet.Security.OpenIdConnect.Primitives;
+using OpenIddict.Validation;
 
-namespace WebApiPractice
+namespace LandonApi
 {
     public class Startup
     {
@@ -28,78 +37,158 @@ namespace WebApiPractice
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.Configure<HotelInfo>(
-                Configuration.GetSection("Info")
-            );
+            services.Configure<HotelInfo>(Configuration.GetSection("Info"));
+            services.Configure<HotelOptions>(Configuration);
+            services.Configure<PagingOptions>(
+                Configuration.GetSection("DefaultPagingOptions"));
 
             services.AddScoped<IRoomService, DefaultRoomService>();
+            services.AddScoped<IOpeningService, DefaultOpeningService>();
+            services.AddScoped<IBookingService, DefaultBookingService>();
+            services.AddScoped<IDateLogicService, DefaultDateLogicService>();
+            services.AddScoped<IUserService, DefaultUserService>();
 
-            //Use in-memory database for quick dev and testing
-            services.AddDbContext<HotelApiDbContext>(options =>
+            // Use in-memory database for quick dev and testing
+            // TODO: Swap out for a real database in production
+            services.AddDbContext<HotelApiDbContext>(
+                options =>
+                {
+                    options.UseInMemoryDatabase("landondb");
+                    options.UseOpenIddict<Guid>();
+                });
+
+            // Add OpenIddict services
+            services.AddOpenIddict()
+                .AddCore(options =>
+                {
+                    options.UseEntityFrameworkCore()
+                        .UseDbContext<HotelApiDbContext>()
+                        .ReplaceDefaultEntities<Guid>();
+                })
+                .AddServer(options =>
+                {
+                    options.UseMvc();
+
+                    options.EnableTokenEndpoint("/token");
+
+                    options.AllowPasswordFlow();
+                    options.AcceptAnonymousClients();
+                })
+                .AddValidation();
+
+            // ASP.NET Core Identity should use the same claim names as OpenIddict
+            services.Configure<IdentityOptions>(options =>
             {
-                options.UseInMemoryDatabase("landondb");
+                options.ClaimsIdentity.UserNameClaimType = OpenIdConnectConstants.Claims.Name;
+                options.ClaimsIdentity.UserIdClaimType = OpenIdConnectConstants.Claims.Subject;
+                options.ClaimsIdentity.RoleClaimType = OpenIdConnectConstants.Claims.Role;
             });
 
-            services.AddControllers(options =>
+            services.AddAuthentication(options =>
             {
-                options.Filters.Add<JsonExceptionFilter>();
-                options.Filters.Add<RequireHttpsOrCloseAttribute>();
-                options.Filters.Add<LinkRewritingFilter>();
+                options.DefaultScheme = OpenIddictValidationDefaults.AuthenticationScheme;
             });
 
-            services.AddRouting(options => options.LowercaseUrls = true);
+            // Add ASP.NET Core Identity
+            AddIdentityCoreServices(services);
 
-            // Register the Swagger services
-            services.AddSwaggerDocument();
+            services
+                .AddMvc(options =>
+                {
+                    options.CacheProfiles.Add("Static", new CacheProfile { Duration = 86400 });
+                    options.CacheProfiles.Add("Collection", new CacheProfile { Duration = 60 });
+                    options.CacheProfiles.Add("Resource", new CacheProfile { Duration = 180 });
+
+                    options.Filters.Add<JsonExceptionFilter>();
+                    options.Filters.Add<RequireHttpsOrCloseAttribute>();
+                    options.Filters.Add<LinkRewritingFilter>();
+                })
+                .SetCompatibilityVersion(CompatibilityVersion.Version_2_1)
+                .AddJsonOptions(options =>
+                {
+                    // These should be the defaults, but we can be explicit:
+                    options.SerializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
+                    options.SerializerSettings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
+                    options.SerializerSettings.DateParseHandling = DateParseHandling.DateTimeOffset;
+
+                });
+
+            services
+                .AddRouting(options => options.LowercaseUrls = true);
 
             services.AddApiVersioning(options =>
             {
                 options.DefaultApiVersion = new ApiVersion(1, 0);
-                options.ApiVersionReader = new MediaTypeApiVersionReader();
+                options.ApiVersionReader
+                    = new MediaTypeApiVersionReader();
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.ReportApiVersions = true;
-                options.ApiVersionSelector = new CurrentImplementationApiVersionSelector(options);
+                options.ApiVersionSelector
+                     = new CurrentImplementationApiVersionSelector(options);
             });
 
-            services.AddCors(options => {
-                options.AddPolicy("AllowMyApp", policy => policy
-                //.WithOrigins("https://example.com")); // example.com making requests
-                .AllowAnyOrigin());
+            services.AddAutoMapper(
+                options => options.AddProfile<MappingProfile>());
 
+            services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var errorResponse = new ApiError(context.ModelState);
+                    return new BadRequestObjectResult(errorResponse);
+                };
             });
 
-            services.AddAutoMapper(options => options.AddProfile<MappingProfile>());
+            services.AddResponseCaching();
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("ViewAllUsersPolicy",
+                    p => p.RequireAuthenticatedUser().RequireRole("Admin"));
+
+                options.AddPolicy("ViewAllBookingsPolicy",
+                    p => p.RequireAuthenticatedUser().RequireRole("Admin"));
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
 
-                // Register the Swagger generator and the Swagger UI middlewares
-                app.UseOpenApi();
-                app.UseSwaggerUi3();
-
+                app.UseSwaggerUi3WithApiExplorer(options =>
+                {
+                    options.GeneratorSettings
+                        .DefaultPropertyNameHandling
+                    = NJsonSchema.PropertyNameHandling.CamelCase;
+                });
             }
             else
             {
                 app.UseHsts();
             }
 
-            //app.UseHttpsRedirection();
+            app.UseAuthentication();
 
-            app.UseRouting();
+            app.UseResponseCaching();
 
-            app.UseAuthorization();
+            app.UseMvc();
+        }
 
-            app.UseCors("AllowMyApp");
+        private static void AddIdentityCoreServices(IServiceCollection services)
+        {
+            var builder = services.AddIdentityCore<UserEntity>();
+            builder = new IdentityBuilder(
+                builder.UserType,
+                typeof(UserRoleEntity),
+                builder.Services);
 
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-            });
+            builder.AddRoles<UserRoleEntity>()
+                .AddEntityFrameworkStores<HotelApiDbContext>()
+                .AddDefaultTokenProviders()
+                .AddSignInManager<SignInManager<UserEntity>>();
         }
     }
 }

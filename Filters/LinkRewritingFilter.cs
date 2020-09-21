@@ -1,15 +1,15 @@
+﻿using LandonApi.Infrastructure;
+using LandonApi.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Routing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Mvc.Routing;
-using WebApiPractice.Infrastructure;
-using WebApiPractice.Models;
 
-namespace WebApiPractice.Filters
+namespace LandonApi.Filters
 {
     public class LinkRewritingFilter : IAsyncResultFilter
     {
@@ -19,14 +19,19 @@ namespace WebApiPractice.Filters
         {
             _urlHelperFactory = urlHelperFactory;
         }
-        public Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+
+        public Task OnResultExecutionAsync(
+            ResultExecutingContext context, ResultExecutionDelegate next)
         {
             var asObjectResult = context.Result as ObjectResult;
             bool shouldSkip = asObjectResult?.StatusCode >= 400
                 || asObjectResult?.Value == null
-                || asObjectResult?.Value as Resourсe == null;
+                || asObjectResult?.Value as Resource == null;
 
-            if (shouldSkip) return next();
+            if (shouldSkip)
+            {
+                return next();
+            }
 
             var rewriter = new LinkRewriter(_urlHelperFactory.GetUrlHelper(context));
             RewriteAllLinks(asObjectResult.Value, rewriter);
@@ -39,7 +44,10 @@ namespace WebApiPractice.Filters
             if (model == null) return;
 
             var allProperties = model
-                .GetType().GetTypeInfo().GetAllProperties().Where(p => p.CanRead).ToArray();
+                .GetType().GetTypeInfo()
+                .GetAllProperties()
+                .Where(p => p.CanRead)
+                .ToArray();
 
             var linkProperties = allProperties
                 .Where(p => p.CanWrite && p.PropertyType == typeof(Link));
@@ -47,22 +55,24 @@ namespace WebApiPractice.Filters
             foreach (var linkProperty in linkProperties)
             {
                 var rewritten = rewriter.Rewrite(linkProperty.GetValue(model) as Link);
-
                 if (rewritten == null) continue;
 
                 linkProperty.SetValue(model, rewritten);
 
-                //Special handling of the hidden self property
-                //unwrap into the root object
-                if (linkProperty.Name == nameof(Resourсe.Self))
+                // Special handling of the hidden Self property:
+                // unwrap into the root object
+                if (linkProperty.Name == nameof(Resource.Self))
                 {
-                    allProperties.SingleOrDefault(p => p.Name == nameof(Resourсe.Href))
+                    allProperties
+                        .SingleOrDefault(p => p.Name == nameof(Resource.Href))
                         ?.SetValue(model, rewritten.Href);
 
-                    allProperties.SingleOrDefault(p => p.Name == nameof(Resourсe.Method))
+                    allProperties
+                        .SingleOrDefault(p => p.Name == nameof(Resource.Method))
                         ?.SetValue(model, rewritten.Method);
 
-                    allProperties.SingleOrDefault(p => p.Name == nameof(Resourсe.Relations))
+                    allProperties
+                        .SingleOrDefault(p => p.Name == nameof(Resource.Relations))
                         ?.SetValue(model, rewritten.Relations);
                 }
             }
@@ -70,8 +80,9 @@ namespace WebApiPractice.Filters
             var arrayProperties = allProperties.Where(p => p.PropertyType.IsArray);
             RewriteLinksInArrays(arrayProperties, model, rewriter);
 
-            var objectProperties = allProperties.Except(linkProperties).Except(arrayProperties);
-
+            var objectProperties = allProperties
+                .Except(linkProperties)
+                .Except(arrayProperties);
             RewriteLinksInNestedObjects(objectProperties, model, rewriter);
         }
 
@@ -111,5 +122,6 @@ namespace WebApiPractice.Filters
                 }
             }
         }
+
     }
 }

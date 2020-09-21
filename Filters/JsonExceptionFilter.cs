@@ -1,16 +1,19 @@
+﻿using LandonApi.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Hosting;
-using WebApiPractice.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace WebApiPractice.Filters
+namespace LandonApi.Filters
 {
     public class JsonExceptionFilter : IExceptionFilter
     {
-        private readonly IWebHostEnvironment _env;
+        private readonly IHostingEnvironment _env;
 
-        public JsonExceptionFilter(IWebHostEnvironment env)
+        public JsonExceptionFilter(IHostingEnvironment env)
         {
             _env = env;
         }
@@ -26,7 +29,7 @@ namespace WebApiPractice.Filters
             }
             else
             {
-                error.Message = "A server error occured";
+                error.Message = "A server error occurred.";
                 error.Detail = context.Exception.Message;
             }
 
